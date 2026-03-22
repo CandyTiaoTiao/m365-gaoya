@@ -225,6 +225,33 @@ app.post('/api/admin/config', (req, res) => {
 });
 
 // ==========================================
+// --- 路由美化 (把不带 .html 的路径指向对应的文件) ---
+// ==========================================
+
+// 1. 访问 /admin 自动指向后台管理
+app.get('/admin', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+});
+
+// 2. 访问 /setup 自动指向安装页面
+app.get('/setup', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'setup.html'));
+});
+
+// 3. 首页增强 (让 /home 也能访问首页)
+app.get('/home', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// 4. 万能 404 路由 (必须放在所有路由的最下方！)
+// 只要上面的 API 和 页面路径都没匹配到，就显示我们精美的 404 页面
+app.get('*', (req, res) => {
+    res.status(404).sendFile(path.join(__dirname, 'public', '404.html'));
+});
+// ==========================================
+
+
+// ==========================================
 // 启动服务
 // ==========================================
 app.listen(3000, () => console.log('Microsoft 365 Automation Backend Running on port 3000'));
