@@ -220,7 +220,6 @@
                                 </div>
                                 <div class="dropdown">
                                     <div class="dd-item selected" data-v="tuv.edu.kg">@tuv.edu.kg</div>
-                                    <div class="dd-item" data-v="starproxy.onmicrosoft.com">@starproxy.onmicrosoft.com</div>
                                 </div>
                             </div>
                         </div>
@@ -297,12 +296,41 @@
 const System = {
     Store: { domain: "tuv.edu.kg", isBusy: false },
 
-    init() {
+    // ==============================================================
+    // [修改点] 将 init 升级为 async 异步函数，在第一帧拉取后端配置
+    // ==============================================================
+    async init() {
+        try {
+            const res = await fetch('/api/pub-config');
+            const data = await res.json();
+            
+            if (data.success) {
+                // 1. 动态替换网页的 Title
+                if (data.siteName) {
+                    document.title = data.siteName;
+                }
+                
+                // 2. 动态生成域名下拉菜单
+                if (data.domains && data.domains.length > 0) {
+                    this.Store.domain = data.domains[0];
+                    document.getElementById('domain-display').innerText = "@" + data.domains[0];
+                    
+                    const dropdown = document.querySelector('.dropdown');
+                    dropdown.innerHTML = data.domains.map((d, i) => 
+                        `<div class="dd-item ${i === 0 ? 'selected' : ''}" data-v="${d}">@${d}</div>`
+                    ).join('');
+                }
+            }
+        } catch (e) {
+            console.warn("Failed to load config from backend, using default UI.");
+        }
+
+        // 3. 完美保留所有后续的动效和交互绑定
         this.Visuals.Particles.run();
         this.Visuals.Clock.start();
         this.Visuals.Greetings.loop();
-        this.Events.setup();
-        console.log("System Online: Final Release");
+        this.Events.setup(); // setup 在这里执行，刚好能为上面刚生成的下拉菜单绑定点击事件
+        console.log("System Online: Final Release (Dynamic Config Loaded)");
     },
     reload() { window.location.reload(); },
     
