@@ -17,7 +17,7 @@ const db = new sqlite3.Database(dbPath);
 db.serialize(() => {
     // 注册记录表
     db.run("CREATE TABLE IF NOT EXISTS registration (displayName TEXT, upn TEXT UNIQUE, time DATETIME)");
-    // 系统机密配置表
+    // 系统机密配置表 (注意：使用 INSERT OR REPLACE 来确保 key 唯一)
     db.run("CREATE TABLE IF NOT EXISTS config (key TEXT UNIQUE, value TEXT)");
     // 管理员账号表
     db.run("CREATE TABLE IF NOT EXISTS admin_users (username TEXT UNIQUE, password TEXT)");
@@ -43,7 +43,7 @@ const getConfig = () => {
 // ==========================================
 app.use(async (req, res, next) => {
     // 放行安装页面、安装接口和静态资源
-    if (req.path === '/setup.html' || req.path === '/api/setup' || req.path.startsWith('/assets')) {
+    if (req.path === '/setup.html' || req.path === '/api/setup' || req.path === '/setup' || req.path.startsWith('/assets')) {
         return next();
     }
 
@@ -70,7 +70,8 @@ app.use(async (req, res, next) => {
 // --- 3. 系统初始化 API (首次运行使用) ---
 // ==========================================
 app.post('/api/setup', (req, res) => {
-    const { adminUser, adminPass, tenantId, clientId, clientSecret, skuId, inviteCode } = req.body;
+    // 接收新增的 siteName 和 allowedDomains
+    const { adminUser, adminPass, tenantId, clientId, clientSecret, skuId, inviteCode, siteName, allowedDomains } = req.body;
 
     if (!tenantId || !clientId || !clientSecret) {
         return res.json({ success: false, msg: "Microsoft 365 核心机密信息不能为空" });
@@ -82,13 +83,15 @@ app.post('/api/setup', (req, res) => {
         stmtAdmin.run(adminUser, adminPass);
         stmtAdmin.finalize();
 
-        // 保存各项配置
+        // 保存各项配置 (包含新增的站点显示配置)
         const stmtConf = db.prepare("INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)");
         stmtConf.run('tenantId', tenantId);
         stmtConf.run('clientId', clientId);
         stmtConf.run('clientSecret', clientSecret);
         stmtConf.run('skuId', skuId || '6fd2c87f-b296-42f0-b197-1e91e994b900');
         stmtConf.run('inviteCode', inviteCode || 'schopenhauer'); 
+        stmtConf.run('siteName', siteName || 'Microsoft 365 自动化管理');
+        stmtConf.run('allowedDomains', allowedDomains || ''); // 存入如 "tuv.edu.kg, m365.pro"
         stmtConf.finalize();
 
         isInitialized = true; // 更新内存状态，释放拦截
@@ -97,7 +100,24 @@ app.post('/api/setup', (req, res) => {
 });
 
 // ==========================================
-// --- 4. 前台注册 API (主页使用) ---
+// --- 4. 前台公共配置 API (供首页 index.html 动态渲染) ---
+// ==========================================
+app.get('/api/pub-config', async (req, res) => {
+    try {
+        const conf = await getConfig();
+        res.json({
+            success: true,
+            siteName: conf.siteName || 'Microsoft 365',
+            // 将字符串转为数组，并过滤空格
+            domains: (conf.allowedDomains || '').split(',').map(d => d.trim()).filter(d => d)
+        });
+    } catch (e) {
+        res.json({ success: false, msg: "读取配置失败" });
+    }
+});
+
+// ==========================================
+// --- 5. 前台注册 API (主页使用) ---
 // ==========================================
 
 // 用户名实时查重接口
@@ -118,20 +138,15 @@ app.post('/api/register', async (req, res) => {
     const upn = `${username}@${domain}`;
 
     try {
-        // 动态从数据库获取配置
         const conf = await getConfig();
-
-        // 校验前台输入的邀请码是否和后台配置的一致
         if (inviteCode !== conf.inviteCode) {
             return res.json({ success: false, msg: "邀请码无效" });
         }
 
-        // 1. 本地查重
         db.get("SELECT * FROM registration WHERE upn = ?", [upn], async (err, row) => {
             if (row) return res.json({ success: false, msg: "该用户名在本地已注册" });
 
             try {
-                // 2. 获取 Token (使用数据库中的 conf)
                 const tokenRes = await axios.post(`https://login.microsoftonline.com/${conf.tenantId}/oauth2/v2.0/token`, 
                     new URLSearchParams({
                         client_id: conf.clientId,
@@ -141,7 +156,6 @@ app.post('/api/register', async (req, res) => {
                     }));
                 const token = tokenRes.data.access_token;
 
-                // 3. 创建用户
                 const userRes = await axios.post('https://graph.microsoft.com/v1.0/users', {
                     accountEnabled: true,
                     displayName: displayName || username,
@@ -152,11 +166,8 @@ app.post('/api/register', async (req, res) => {
                 }, { headers: { Authorization: `Bearer ${token}` } });
 
                 const userId = userRes.data.id;
-
-                // 4. 等待 5 秒确保云端同步
                 await new Promise(resolve => setTimeout(resolve, 5000));
 
-                // 5. 分配许可证
                 if (conf.skuId) {
                     await axios.post(`https://graph.microsoft.com/v1.0/users/${userId}/assignLicense`, {
                         addLicenses: [{ skuId: conf.skuId }], 
@@ -164,9 +175,7 @@ app.post('/api/register', async (req, res) => {
                     }, { headers: { Authorization: `Bearer ${token}` } });
                 }
 
-                // 6. 写入本地 DB
                 db.run("INSERT INTO registration (displayName, upn, time) VALUES (?, ?, ?)", [displayName, upn, new Date().toISOString()]);
-                
                 res.json({ success: true });
 
             } catch (e) {
@@ -181,43 +190,30 @@ app.post('/api/register', async (req, res) => {
 });
 
 // ==========================================
-// --- 5. 管理后台专属 API (admin.html使用) ---
+// --- 6. 管理后台专属 API ---
 // ==========================================
 
-// 管理员登录接口
 app.post('/api/admin/login', (req, res) => {
     const { username, password } = req.body;
     db.get("SELECT * FROM admin_users WHERE username = ? AND password = ?", [username, password], (err, row) => {
-        if (err || !row) {
-            return res.json({ success: false, msg: "用户名或密码错误" });
-        }
-        // 简单签发一个基础 Token (Base64编码)
+        if (err || !row) return res.json({ success: false, msg: "用户名或密码错误" });
         const token = Buffer.from(`${username}:${password}`).toString('base64');
         res.json({ success: true, token: token });
     });
 });
 
-// 获取当前邀请码接口
 app.get('/api/admin/config', async (req, res) => {
-    const auth = req.headers.authorization;
-    if (!auth) return res.status(401).json({ success: false, msg: "未授权访问" });
-
+    if (!req.headers.authorization) return res.status(401).json({ success: false, msg: "未授权访问" });
     try {
         const conf = await getConfig();
         res.json({ success: true, inviteCode: conf.inviteCode });
-    } catch (e) {
-        res.json({ success: false, msg: "读取配置失败" });
-    }
+    } catch (e) { res.json({ success: false, msg: "读取配置失败" }); }
 });
 
-// 更新邀请码接口
 app.post('/api/admin/config', (req, res) => {
-    const auth = req.headers.authorization;
-    if (!auth) return res.status(401).json({ success: false, msg: "未授权访问" });
-
+    if (!req.headers.authorization) return res.status(401).json({ success: false, msg: "未授权访问" });
     const { inviteCode } = req.body;
     if (!inviteCode) return res.json({ success: false, msg: "邀请码不能为空" });
-
     db.run("UPDATE config SET value = ? WHERE key = 'inviteCode'", [inviteCode], function(err) {
         if (err) return res.json({ success: false, msg: "数据库更新失败" });
         res.json({ success: true, msg: "系统邀请码已更新！" });
@@ -225,31 +221,15 @@ app.post('/api/admin/config', (req, res) => {
 });
 
 // ==========================================
-// --- 路由美化 (把不带 .html 的路径指向对应的文件) ---
+// --- 路由美化 ---
 // ==========================================
+app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
+app.get('/setup', (req, res) => res.sendFile(path.join(__dirname, 'public', 'setup.html')));
+app.get('/home', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
-// 1. 访问 /admin 自动指向后台管理
-app.get('/admin', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'admin.html'));
-});
-
-// 2. 访问 /setup 自动指向安装页面
-app.get('/setup', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'setup.html'));
-});
-
-// 3. 首页增强 (让 /home 也能访问首页)
-app.get('/home', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
-// 4. 万能 404 路由 (必须放在所有路由的最下方！)
-// 只要上面的 API 和 页面路径都没匹配到，就显示我们精美的 404 页面
 app.get('*', (req, res) => {
     res.status(404).sendFile(path.join(__dirname, 'public', '404.html'));
 });
-// ==========================================
-
 
 // ==========================================
 // 启动服务
