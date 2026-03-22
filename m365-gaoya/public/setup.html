@@ -126,6 +126,19 @@
             </div>
 
             <div id="view-form">
+                <div class="section-title">Site Branding</div>
+                <div class="form-row">
+                    <label class="label">Site Name (Title)</label>
+                    <div class="input-box req-box" id="wrap-siteName">
+                        <input type="text" id="in-siteName" value="Microsoft 365" placeholder="e.g. M365 Cloud Center" autocomplete="off">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <label class="label">Allowed Domains (Comma separated)</label>
+                    <div class="input-box req-box" id="wrap-allowedDomains">
+                        <input type="text" id="in-allowedDomains" placeholder="e.g. tuv.edu.kg, tuv.pp.ua" autocomplete="off">
+                    </div>
+                </div>
                 <div class="section-title">Admin Account</div>
                 <div class="form-row">
                     <label class="label">Admin Username</label>
@@ -204,8 +217,8 @@ const System = {
     
     Events: {
         setup() {
-            // 实时校验必填项
-            const reqFields = ['adminUser', 'adminPass', 'tenantId', 'clientId', 'clientSecret'];
+            // =================修改：增加新字段到实时校验队列=================
+            const reqFields = ['siteName', 'allowedDomains', 'adminUser', 'adminPass', 'tenantId', 'clientId', 'clientSecret'];
             reqFields.forEach(key => {
                 const el = document.getElementById('in-' + key);
                 el.addEventListener('input', () => {
@@ -222,7 +235,8 @@ const System = {
             this.checkForm();
         },
         checkForm() {
-            const reqFields = ['adminUser', 'adminPass', 'tenantId', 'clientId', 'clientSecret'];
+            // =================修改：包含新字段进行全局非空判定=================
+            const reqFields = ['siteName', 'allowedDomains', 'adminUser', 'adminPass', 'tenantId', 'clientId', 'clientSecret'];
             const isValid = reqFields.every(key => document.getElementById('in-' + key).value.trim().length > 0);
             const btn = document.getElementById('btn-submit');
             if(isValid) {
@@ -254,7 +268,10 @@ const System = {
             btn.classList.remove('ready');
             btn.innerHTML = 'Initializing...';
             
+            // =================修改：把新字段抓取进 payload=================
             const payload = {
+                siteName: document.getElementById('in-siteName').value.trim(),
+                allowedDomains: document.getElementById('in-allowedDomains').value.trim(),
                 adminUser: document.getElementById('in-adminUser').value.trim(),
                 adminPass: document.getElementById('in-adminPass').value.trim(),
                 tenantId: document.getElementById('in-tenantId').value.trim(),
@@ -290,16 +307,14 @@ const System = {
     },
 
     // ==========================================
-    // --- 动效核心 (完全移植原版 index.html JS) ---
+    // --- 动效核心 (完美保留，未做任何修改) ---
     // ==========================================
     Visuals: {
         Particles: { 
             run() { 
                 const cvs = document.getElementById('particle-canvas'); const ctx = cvs.getContext('2d'); let w, h; const p = []; const mouse = { x: null, y: null };
                 const resize = () => { w=cvs.width=window.innerWidth; h=cvs.height=window.innerHeight; }; window.addEventListener('resize', resize); resize();
-                // 恢复原版鼠标互动
                 window.addEventListener('mousemove', (e) => { mouse.x=e.x; mouse.y=e.y; }); window.addEventListener('mouseleave', () => { mouse.x=null; mouse.y=null; });
-                // 恢复原版 45 个粒子
                 for(let i=0; i<45; i++) p.push({ x: Math.random()*w, y: Math.random()*h, vx: (Math.random()-.5)*0.5, vy: (Math.random()-.5)*0.5 });
                 const animate = () => { ctx.clearRect(0,0,w,h); ctx.fillStyle = 'rgba(100,100,100,0.5)'; p.forEach(n => { n.x += n.vx; n.y += n.vy; if(n.x<0 || n.x>w) n.vx *= -1; if(n.y<0 || n.y>h) n.vy *= -1; if(mouse.x != null) { let dx = mouse.x - n.x; let dy = mouse.y - n.y; let dist = Math.sqrt(dx*dx + dy*dy); if (dist < 100) { const force = (100 - dist) / 100; n.x -= (dx / dist) * force * 2; n.y -= (dy / dist) * force * 2; } } ctx.beginPath(); ctx.arc(n.x, n.y, 1.5, 0, Math.PI*2); ctx.fill(); }); requestAnimationFrame(animate); }; animate();
             } 
