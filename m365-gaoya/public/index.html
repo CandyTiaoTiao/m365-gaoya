@@ -126,10 +126,14 @@
         
         .combo-box { display: flex; width: 100%; height: 100%; gap: 8px; }
         .combo-input { flex: 1; min-width: 0; }
-        .combo-select { flex: 0 0 auto; max-width: 60%; position: relative; }
+        .combo-select { flex: 0 0 auto; max-width: 55%; position: relative; } /* 限制下拉框最大宽度 */
+        
         .domain-btn { height: 100%; display: flex; align-items: center; gap: 8px; padding: 0 14px; background: #f9f9f9; border: 1px solid var(--color-border); border-radius: var(--radius-input); cursor: pointer; transition: 0.2s; }
         .domain-btn:hover { background: #f0f0f0; border-color: #aaa; }
-        .domain-val { font-size: 13px; font-weight: 600; color: var(--theme-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        
+        /* 优化：域名显示增加最大宽度和省略号，防止撑爆同行元素 */
+        .domain-val { font-size: 13px; font-weight: 600; color: var(--theme-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 120px; display: inline-block; vertical-align: middle; }
+        
         .icon-chev { width: 10px; fill: #666; transition: 0.3s; flex-shrink: 0; }
         .combo-select.active .icon-chev { transform: rotate(180deg); fill: var(--theme-primary); }
         
@@ -169,7 +173,9 @@
         .meta-clock { font-size: 10px; color: #bbb; margin-top: 2px; }
         
         .toast-container { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 10px; z-index: 10000; pointer-events: none; }
-        .toast-msg { background: rgba(30, 30, 30, 0.9); color: #fff; padding: 12px 24px; border-radius: 50px; font-size: 13px; font-weight: 600; opacity: 0; transform: translateY(20px); transition: all 0.4s var(--ease-bounce); }
+        
+        /* 优化：弹窗兼容多行超长文本，优化圆角和行高 */
+        .toast-msg { background: rgba(30, 30, 30, 0.95); color: #fff; padding: 12px 20px; border-radius: 12px; font-size: 13px; font-weight: 500; line-height: 1.5; max-width: 85vw; width: max-content; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.2); opacity: 0; transform: translateY(20px); transition: all 0.4s var(--ease-bounce); }
         .toast-msg.show { opacity: 1; transform: translateY(0); }
     </style>
 </head>
@@ -219,8 +225,7 @@
                                     <svg class="icon-chev" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
                                 </div>
                                 <div class="dropdown">
-                                    <div class="dd-item selected" data-v="tuv.edu.kg">@tuv.edu.kg</div>
-                                </div>
+                                    </div>
                             </div>
                         </div>
                     </div>
@@ -292,45 +297,58 @@
     </div>
 
 <script>
-/* Knowhere OS v60.3 - Final Release with Dynamic Backend Integration */
+/* Knowhere OS v60.4 - UI & Defensive Overhaul */
 const System = {
     Store: { domain: "tuv.edu.kg", isBusy: false },
 
-    // ==============================================================
-    // [修改点] 将 init 升级为 async 异步函数，在第一帧拉取后端配置
-    // ==============================================================
     async init() {
         try {
             const res = await fetch('/api/pub-config');
             const data = await res.json();
             
             if (data.success) {
-                // 1. 动态替换网页的 Title
-                if (data.siteName) {
-                    document.title = data.siteName;
-                }
+                if (data.siteName) document.title = data.siteName;
                 
-                // 2. 动态生成域名下拉菜单
+                // 优化：正则切分域名，防呆处理中英文逗号混合的情况
+                let safeDomains = [];
                 if (data.domains && data.domains.length > 0) {
-                    this.Store.domain = data.domains[0];
-                    document.getElementById('domain-display').innerText = "@" + data.domains[0];
+                    safeDomains = data.domains.join(',').split(/[,，]/).map(d => d.trim()).filter(d => d);
+                } else {
+                    safeDomains = ["domain is loading..."];
+                }
+
+                if (safeDomains.length > 0) {
+                    this.Store.domain = safeDomains[0];
+                    document.getElementById('domain-display').innerText = "@" + safeDomains[0];
                     
                     const dropdown = document.querySelector('.dropdown');
-                    dropdown.innerHTML = data.domains.map((d, i) => 
+                    dropdown.innerHTML = safeDomains.map((d, i) => 
                         `<div class="dd-item ${i === 0 ? 'selected' : ''}" data-v="${d}">@${d}</div>`
                     ).join('');
+
+                    // ====== 新增：如果只有一个域名，隐藏箭头并取消按钮样式 ======
+                    if (safeDomains.length === 1) {
+                        document.querySelector('.icon-chev').style.display = 'none'; // 隐藏箭头
+                        document.getElementById('domain-trigger').style.pointerEvents = 'none'; // 禁用点击
+                        
+                        // 去掉按钮的背景和边框，让它看起来像个普通文本
+                        const dBtn = document.querySelector('.domain-btn');
+                        dBtn.style.background = 'transparent';
+                        dBtn.style.borderColor = 'transparent';
+                        dBtn.style.paddingRight = '0';
+                        dBtn.style.cursor = 'default';
+                    // =========================================================
+                }
                 }
             }
         } catch (e) {
-            console.warn("Failed to load config from backend, using default UI.");
+            console.warn("Failed to load config, using default UI.");
         }
 
-        // 3. 完美保留所有后续的动效和交互绑定
         this.Visuals.Particles.run();
         this.Visuals.Clock.start();
         this.Visuals.Greetings.loop();
-        this.Events.setup(); // setup 在这里执行，刚好能为上面刚生成的下拉菜单绑定点击事件
-        console.log("System Online: Final Release (Dynamic Config Loaded)");
+        this.Events.setup();
     },
     reload() { window.location.reload(); },
     
@@ -341,39 +359,29 @@ const System = {
             fields.forEach(key => {
                 const inputEl = document.getElementById('in-' + key);
                 
-                // 1. INPUT 事件：实时监测
                 inputEl.addEventListener('input', () => {
                     const val = inputEl.value.trim();
                     const isValid = System.Security.validate(key, val);
                     
                     System.UI.clearError(key); 
-                    
                     if (val.length > 0) {
-                        if (isValid) {
-                            System.UI.setValid(key, true);
-                        } else {
-                            System.UI.setValid(key, false);
-                        }
+                        System.UI.setValid(key, isValid);
                     } else {
                         System.UI.setValid(key, false);
                     }
-                    
                     System.UI.updateBtnState();
                 });
 
-                // 2. BLUR 事件：失焦检测 (包含与真实的后端对接查重)
                 inputEl.addEventListener('blur', async () => {
                     const val = inputEl.value.trim();
                     
                     if (val.length > 0) {
-                        // 2.1 先检查格式是否正确
                         if (!System.Security.validate(key, val)) {
                             System.UI.setError(key);
                             System.UI.updateBtnState();
                             return; 
                         }
 
-                        // 2.2 用户名查重逻辑 (对接真实后端数据库)
                         if (key === 'un') {
                             try {
                                 const res = await fetch(`/api/check-username?username=${val}&domain=${System.Store.domain}`);
@@ -384,14 +392,11 @@ const System = {
                                     return;
                                 }
                             } catch (e) {
-                                console.error("查重网络请求异常", e);
+                                console.error("查重网络异常", e);
                             }
                         }
-                        
                     } else {
-                        if (key !== 'dn') { 
-                             System.UI.setError(key, "This field is required");
-                        }
+                        if (key !== 'dn') System.UI.setError(key, "This field is required");
                     }
                     System.UI.updateBtnState();
                 });
@@ -405,22 +410,24 @@ const System = {
                 domMenu.style.display = isOpen ? 'none' : 'block';
                 domTrig.classList.toggle('active', !isOpen);
             });
-            document.querySelectorAll('.dd-item').forEach(item => {
-                item.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    document.querySelectorAll('.dd-item').forEach(i => i.classList.remove('selected'));
-                    item.classList.add('selected');
-                    System.Store.domain = item.dataset.v;
-                    document.getElementById('domain-display').innerText = "@" + System.Store.domain;
-                    domMenu.style.display = 'none';
-                    domTrig.classList.remove('active');
-                    // 切换域名后，重新触发一次用户名查重
-                    const unInput = document.getElementById('in-un');
-                    if (unInput.value.trim().length > 0) {
-                        unInput.dispatchEvent(new Event('blur'));
-                    }
-                });
+            
+            // 使用事件委托处理动态生成的下拉菜单项
+            domMenu.addEventListener('click', (e) => {
+                const item = e.target.closest('.dd-item');
+                if (!item) return;
+                
+                e.stopPropagation();
+                document.querySelectorAll('.dd-item').forEach(i => i.classList.remove('selected'));
+                item.classList.add('selected');
+                System.Store.domain = item.dataset.v;
+                document.getElementById('domain-display').innerText = "@" + System.Store.domain;
+                domMenu.style.display = 'none';
+                domTrig.classList.remove('active');
+                
+                const unInput = document.getElementById('in-un');
+                if (unInput.value.trim().length > 0) unInput.dispatchEvent(new Event('blur'));
             });
+            
             document.addEventListener('click', () => { domMenu.style.display = 'none'; domTrig.classList.remove('active'); });
 
             document.getElementById('copy-btn').addEventListener('click', function() {
@@ -454,11 +461,7 @@ const System = {
             const errBox = document.getElementById('err-' + key);
             el.classList.remove('valid');
             el.classList.add('invalid');
-            if (customMsg) {
-                document.getElementById('txt-' + key).innerText = customMsg;
-            } else {
-                document.getElementById('txt-' + key).innerText = System.Security.msgs[key];
-            }
+            document.getElementById('txt-' + key).innerText = customMsg || System.Security.msgs[key];
             errBox.classList.add('show');
         },
         clearError(key) {
@@ -489,10 +492,7 @@ const System = {
             el.innerText = msg;
             box.appendChild(el);
             setTimeout(() => el.classList.add('show'), 10);
-            setTimeout(() => {
-                el.classList.remove('show');
-                setTimeout(() => el.remove(), 400);
-            }, 3000);
+            setTimeout(() => { el.classList.remove('show'); setTimeout(() => el.remove(), 400); }, 3000);
         }
     },
 
@@ -501,7 +501,6 @@ const System = {
             dn: v => v.length >= 2,
             un: v => /^[a-zA-Z0-9\-]{3,20}$/.test(v),
             pw: v => /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/.test(v),
-            /* 前端不再写死密码，只要用户填了东西，前端校验就通过，真正对错交由后端的 API 判断 */
             ic: v => v.trim().length > 0 
         },
         msgs: {
@@ -517,6 +516,8 @@ const System = {
             if (m.includes('forbidden') || m.includes('code') || m.includes('邀请码无效')) return "邀请码无效或已过期";
             if (m.includes('quota')) return "租户用户配额已满";
             if (m.includes('password')) return "密码不符合微软安全要求";
+            // 优化：针对图片里超长的域名报错，精简为一句中文
+            if (m.includes('domain portion') || m.includes('invalid domain')) return "该域名未在微软后台验证通过";
             if (m.includes('fetch') || m.includes('network') || m.includes('无法读取')) return "网络或配置异常，请联系管理员";
             return "Error: " + (raw || "Unknown");
         }
@@ -560,7 +561,6 @@ const System = {
                     document.getElementById('view-success').style.display = 'flex';
                     document.getElementById('res-upn').innerText = `${payload.username}@${payload.domain}`;
                 } else {
-                    // 如果后端返回错误（如邀请码错误），抛出异常让 catch 捕获处理
                     throw new Error(data.msg || "Server rejected request");
                 }
 
@@ -571,10 +571,11 @@ const System = {
                 btn.classList.add('ready');
                 btn.disabled = false;
                 txt.innerText = "Deploy Account";
-                System.UI.toast(System.Security.translateError(e.message));
                 
-                // 如果是邀请码错误，让输入框爆红
-                if (e.message.includes('邀请码无效')) {
+                const translatedMsg = System.Security.translateError(e.message);
+                System.UI.toast(translatedMsg);
+                
+                if (translatedMsg.includes('邀请码无效')) {
                     System.UI.setError('ic', 'Invalid Access Token');
                     System.UI.updateBtnState();
                 }
