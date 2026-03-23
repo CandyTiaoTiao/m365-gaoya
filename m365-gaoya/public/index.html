@@ -126,12 +126,11 @@
         
         .combo-box { display: flex; width: 100%; height: 100%; gap: 8px; }
         .combo-input { flex: 1; min-width: 0; }
-        .combo-select { flex: 0 0 auto; max-width: 55%; position: relative; } /* 限制下拉框最大宽度 */
+        .combo-select { flex: 0 0 auto; max-width: 55%; position: relative; }
         
         .domain-btn { height: 100%; display: flex; align-items: center; gap: 8px; padding: 0 14px; background: #f9f9f9; border: 1px solid var(--color-border); border-radius: var(--radius-input); cursor: pointer; transition: 0.2s; }
         .domain-btn:hover { background: #f0f0f0; border-color: #aaa; }
         
-        /* 优化：域名显示增加最大宽度和省略号，防止撑爆同行元素 */
         .domain-val { font-size: 13px; font-weight: 600; color: var(--theme-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 120px; display: inline-block; vertical-align: middle; }
         
         .icon-chev { width: 10px; fill: #666; transition: 0.3s; flex-shrink: 0; }
@@ -173,8 +172,6 @@
         .meta-clock { font-size: 10px; color: #bbb; margin-top: 2px; }
         
         .toast-container { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 10px; z-index: 10000; pointer-events: none; }
-        
-        /* 优化：弹窗兼容多行超长文本，优化圆角和行高 */
         .toast-msg { background: rgba(30, 30, 30, 0.95); color: #fff; padding: 12px 20px; border-radius: 12px; font-size: 13px; font-weight: 500; line-height: 1.5; max-width: 85vw; width: max-content; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.2); opacity: 0; transform: translateY(20px); transition: all 0.4s var(--ease-bounce); }
         .toast-msg.show { opacity: 1; transform: translateY(0); }
     </style>
@@ -225,7 +222,7 @@
                                     <svg class="icon-chev" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
                                 </div>
                                 <div class="dropdown">
-                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -297,7 +294,7 @@
     </div>
 
 <script>
-/* Knowhere OS v60.4 - UI & Defensive Overhaul */
+/* Knowhere OS v60.5 - Flawless UI Iteration */
 const System = {
     Store: { domain: "tuv.edu.kg", isBusy: false },
 
@@ -309,7 +306,6 @@ const System = {
             if (data.success) {
                 if (data.siteName) document.title = data.siteName;
                 
-                // 优化：正则切分域名，防呆处理中英文逗号混合的情况
                 let safeDomains = [];
                 if (data.domains && data.domains.length > 0) {
                     safeDomains = data.domains.join(',').split(/[,，]/).map(d => d.trim()).filter(d => d);
@@ -326,19 +322,12 @@ const System = {
                         `<div class="dd-item ${i === 0 ? 'selected' : ''}" data-v="${d}">@${d}</div>`
                     ).join('');
 
-                    // ====== 新增：如果只有一个域名，隐藏箭头并取消按钮样式 ======
+                    // ====== 新增：如果只有一个域名，保留框UI，隐藏箭头并禁用点击 ======
                     if (safeDomains.length === 1) {
                         document.querySelector('.icon-chev').style.display = 'none'; // 隐藏箭头
-                        document.getElementById('domain-trigger').style.pointerEvents = 'none'; // 禁用点击
-                        
-                        // 去掉按钮的背景和边框，让它看起来像个普通文本
-                        const dBtn = document.querySelector('.domain-btn');
-                        dBtn.style.background = 'transparent';
-                        dBtn.style.borderColor = 'transparent';
-                        dBtn.style.paddingRight = '0';
-                        dBtn.style.cursor = 'default';
+                        document.getElementById('domain-trigger').style.pointerEvents = 'none'; // 禁用点击，同时防止 hover 变色
+                    }
                     // =========================================================
-                }
                 }
             }
         } catch (e) {
@@ -411,7 +400,6 @@ const System = {
                 domTrig.classList.toggle('active', !isOpen);
             });
             
-            // 使用事件委托处理动态生成的下拉菜单项
             domMenu.addEventListener('click', (e) => {
                 const item = e.target.closest('.dd-item');
                 if (!item) return;
@@ -516,7 +504,6 @@ const System = {
             if (m.includes('forbidden') || m.includes('code') || m.includes('邀请码无效')) return "邀请码无效或已过期";
             if (m.includes('quota')) return "租户用户配额已满";
             if (m.includes('password')) return "密码不符合微软安全要求";
-            // 优化：针对图片里超长的域名报错，精简为一句中文
             if (m.includes('domain portion') || m.includes('invalid domain')) return "该域名未在微软后台验证通过";
             if (m.includes('fetch') || m.includes('network') || m.includes('无法读取')) return "网络或配置异常，请联系管理员";
             return "Error: " + (raw || "Unknown");
