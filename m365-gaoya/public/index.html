@@ -98,8 +98,10 @@
         /* ==========================================================================
          * 3. 业务组件样式
          * ========================================================================== */
-        h1 { margin: 0; height: 32px; overflow: hidden; position: relative; color: var(--color-text-main); font-size: 24px; font-weight: 600; letter-spacing: -0.5px; }
-        .greeting-text { display: block; animation: text-cycle 2.5s infinite var(--ease-fluent); }
+        /* ⬇️ 这里加粗放大标题，提升质感 */
+        h1 { margin: 0; height: 40px; overflow: hidden; position: relative; color: var(--color-text-main); font-size: 28px; font-weight: 700; letter-spacing: -0.5px; }
+        /* ⬇️ 动画时间调整为 3s */
+        .greeting-text { display: block; animation: text-cycle 3s infinite var(--ease-fluent); }
         @keyframes text-cycle { 0%, 5% { opacity: 0; transform: translateY(10px); filter: blur(4px); } 15%, 85% { opacity: 1; transform: translateY(0); filter: blur(0); } 95%, 100% { opacity: 0; transform: translateY(-10px); filter: blur(4px); } }
         
         .form-row { margin-bottom: 24px; position: relative; }
@@ -572,7 +574,23 @@ const System = {
     
     Visuals: {
         Clock: { start() { setInterval(() => { const d = new Date(); document.getElementById('clock').innerText = d.getHours().toString().padStart(2,'0') + ":" + d.getMinutes().toString().padStart(2,'0'); }, 1000); } },
-        Greetings: { loop() { const words = ["Hello", "你好", "Bonjour", "안녕하세요","Hola", "こんにちは","Ciao", "สวัสดีค่ะ"]; let i = 0; setInterval(() => { const el = document.getElementById('greeting-box'); i = (i + 1) % words.length; el.innerHTML = `<span class="greeting-text">${words[i]}</span>`; }, 2500); } },
+        
+        /* ⬇️ 修复并优化的问候语逻辑：使用 animationiteration 完美同步动画 */
+        Greetings: { 
+            loop() { 
+                const words = ["你好", "Bonjour", "안녕하세요", "Hola", "こんにちは", "Ciao", "สวัสดีค่ะ", "Welcome"]; 
+                let i = 0; 
+                const textSpan = document.querySelector('.greeting-text');
+                
+                if (!textSpan) return;
+
+                textSpan.addEventListener('animationiteration', () => {
+                    textSpan.innerText = words[i];
+                    i = (i + 1) % words.length;
+                });
+            } 
+        },
+
         Particles: { 
             run() { 
                 const cvs = document.getElementById('particle-canvas'); const ctx = cvs.getContext('2d'); let w, h; const p = []; const mouse = { x: null, y: null };
