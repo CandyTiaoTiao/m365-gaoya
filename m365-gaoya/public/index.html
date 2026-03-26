@@ -220,7 +220,7 @@
                     </div>
                     <div class="error-hint" id="err-dn">
                         <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
-                        <span id="txt-dn">Name must be at least 2 chars</span>
+                        <span id="txt-dn">Must be at least 2 characters</span>
                     </div>
                 </div>
 
@@ -247,7 +247,7 @@
                     </div>
                     <div class="error-hint" id="err-un">
                         <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
-                        <span id="txt-un">3-20 chars, Letters/Numbers only</span>
+                        <span id="txt-un">3-20 chars, letters/numbers/hyphens only</span>
                     </div>
                 </div>
 
@@ -258,7 +258,7 @@
                     </div>
                     <div class="error-hint" id="err-ic">
                         <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
-                        <span id="txt-ic">Token Invalid</span>
+                        <span id="txt-ic">Access Token is required</span>
                     </div>
                 </div>
 
@@ -269,7 +269,7 @@
                     </div>
                     <div class="error-hint" id="err-pw">
                         <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
-                        <span id="txt-pw">Too weak (Need Upper+Lower+Digit)</span>
+                        <span id="txt-pw">Requires 8+ chars, uppercase, lowercase, & numbers</span>
                     </div>
                 </div>
 
@@ -395,7 +395,7 @@ const System = {
                                 const res = await fetch(`/api/check-username?username=${val}&domain=${System.Store.domain}`);
                                 const data = await res.json();
                                 if (!data.available) {
-                                    System.UI.setError(key, "username already taken");
+                                    System.UI.setError(key, "This username is already taken");
                                     System.UI.updateBtnState();
                                     return;
                                 }
@@ -518,20 +518,20 @@ const System = {
             ic: v => v.trim().length > 0 
         },
         msgs: {
-            dn: "Display name is too short",
-            un: "3-20 chars, Letters/Numbers/- only",
-            pw: "Too weak (Need 8+ chars, A-Z, a-z, 0-9)",
-            ic: "Access Token cannot be empty"
+            dn: "Display name must be at least 2 characters",
+            un: "3-20 characters, letters/numbers/hyphens only",
+            pw: "Requires at least 8 chars, including uppercase, lowercase, and numbers",
+            ic: "Access Token is required"
         },
         validate(key, val) { return this.rules[key](val); },
         translateError(raw) {
             const m = (raw || "").toLowerCase();
-            if (m.includes('conflict') || m.includes('exists') || m.includes('在本地已注册')) return "该用户名已被占用";
-            if (m.includes('forbidden') || m.includes('code') || m.includes('邀请码无效')) return "邀请码无效或已过期";
-            if (m.includes('quota')) return "租户用户配额已满";
-            if (m.includes('password')) return "密码不符合微软安全要求";
-            if (m.includes('domain portion') || m.includes('invalid domain')) return "该域名未在微软后台验证通过";
-            if (m.includes('fetch') || m.includes('network') || m.includes('无法读取')) return "网络或配置异常，请联系管理员";
+            if (m.includes('conflict') || m.includes('exists') || m.includes('在本地已注册')) return "此用户名已被注册，请尝试其他名称";
+            if (m.includes('forbidden') || m.includes('code') || m.includes('邀请码无效')) return "Access Token 无效或已过期";
+            if (m.includes('quota')) return "当前组织的用户配额已满，无法创建新账号";
+            if (m.includes('password')) return "密码强度不足，请包含大小写字母及数字";
+            if (m.includes('domain portion') || m.includes('invalid domain')) return "所选域名尚未通过系统验证，请联系管理员";
+            if (m.includes('fetch') || m.includes('network') || m.includes('无法读取')) return "网络连接失败或配置异常，请稍后重试";
             return "Error: " + (raw || "Unknown");
         }
     },
@@ -588,7 +588,7 @@ const System = {
                 const translatedMsg = System.Security.translateError(e.message);
                 System.UI.toast(translatedMsg);
                 
-                if (translatedMsg.includes('邀请码无效')) {
+                if (translatedMsg.includes('Token 无效') || translatedMsg.includes('邀请码无效')) {
                     System.UI.setError('ic', 'Invalid Access Token');
                     System.UI.updateBtnState();
                 }
