@@ -367,6 +367,16 @@ const System = {
             fields.forEach(key => {
                 const inputEl = document.getElementById('in-' + key);
                 
+                // ==========================================
+                // 💡 修复软键盘遮挡：获取焦点时平滑滚动到可视区域中央
+                // ==========================================
+                inputEl.addEventListener('focus', function() {
+                    setTimeout(() => {
+                        this.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }, 300);
+                });
+                // ==========================================
+                
                 inputEl.addEventListener('input', () => {
                     const val = inputEl.value.trim();
                     const isValid = System.Security.validate(key, val);
